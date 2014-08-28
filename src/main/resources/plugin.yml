@@ -1,0 +1,29 @@
+name: GoodShop
+main: com.mukunda.goodshop.GoodShopPlugin
+version: ${version}
+depend:
+ - Vault 
+
+
+permissions:
+  goodshop.normal:
+    description: Access to GoodShop stores.
+    default: true
+  goodshop.manage:
+    description: GoodShop admin access.
+    default: op
+  goodshop.api:
+    description: GoodShop API access.
+    default: op
+
+commands:
+  test2:
+    description: testing command
+    usage: /test2
+  shoptag:
+    description: Create shop tag.
+    usage: /shoptag <buyprice> <sellprice>
+  goodshop_open:
+    description: Open shop window.
+    usage: /goodshop_open <name> <location> <size> [player]
+    permission: goodshop.api
