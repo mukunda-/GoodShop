@@ -5,18 +5,39 @@ import org.bukkit.inventory.ItemStack;
 import com.mukunda.loremeta.LoreMeta;
 
 public class PriceTag {
+	
+//	public static enum Type {
+//		NORMAL,
+//		MAGICTAG
+//	};
+//	public Type type;
+	
 	public ItemStack item;
+	
 	public Float buy;
 	public Float sell;
 	public Float sellSingle = null; // filled in by user.
+	public Byte slot;
+	
 	public boolean valid = false;
+	
+	public boolean magictag;
+	public String action;
 	
 	public PriceTag( ItemStack item, ItemStack tag ) {
 		// read prices from tag item
 		buy = null;
 		sell = null;
 		try {
-			String str = LoreMeta.getField( item, "BUY" );
+			String str;
+			
+			str = LoreMeta.getField( tag, "ACTION" );
+			if( str != null ) {
+				magictag = true;
+				action = str;
+			}
+			
+			str = LoreMeta.getField( tag, "BUY" );
 			if( str != null ) {
 				if( str.equals("FREE" ) ) {
 					buy = 0.0f;
@@ -27,11 +48,17 @@ public class PriceTag {
 				}
 			}
 			
-			str = LoreMeta.getField( item, "SELL" );
+			str = LoreMeta.getField( tag, "SELL" );
 			if( str != null ) {
 				float cost = Float.parseFloat( str );   
 				if( cost <= 0.0f ) throw new NumberFormatException();
 				sell = cost;
+			}
+			
+			str = LoreMeta.getField( tag, "SLOT" );
+			if( str != null ) {
+				slot = Byte.parseByte( str );   
+				if( slot < 0 ) throw new NumberFormatException();
 			}
 			
 			/*
@@ -58,8 +85,6 @@ public class PriceTag {
 				
 			}*/
 		} catch( NumberFormatException e ) {
-			buy = null;
-			sell = null;
 			valid = false;
 			return;
 		}
@@ -69,8 +94,6 @@ public class PriceTag {
 		}
 		if( sell != null && buy != null && sell > buy ) {
 			// invalid price tag.
-			buy = null;
-			sell = null;
 			valid = false;
 			return;
 		}

@@ -4,6 +4,7 @@ version: ${version}
 depend:
  - Vault 
  - LoreMeta
+ - MagicItems
 
 
 permissions:
@@ -21,10 +22,10 @@ commands:
   test2:
     description: testing command
     usage: /test2
-  shoptag:
+  goodshop:
     description: Goodshop admin access
     usage: /goodshop <command> ...
-  goodshop_open:
-    description: Open shop window.
-    usage: /goodshop_open <name> <location> <size> [player]
+  goodshop_api:
+    description: Goodshop API access
+    usage: /goodshop_api <command> ...
     permission: goodshop.api

@@ -52,11 +52,17 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
+ 
 
-import com.mukunda.cmdhandler.CommandGroup;
-import com.mukunda.goodshop.commands.PricetagCommand;
+
+
+
 import com.mukunda.loremeta.LoreMeta;
 import com.mukunda.loremeta.MetaKeyByte;
+import com.mukunda.loremeta.MetaKeyFlag;
+import com.mukunda.loremeta.MetaKeyText;
+import com.mukunda.magicitems.MagicItems;
+import com.mukunda.magicitems.NotAMagicItem;
  
 //-------------------------------------------------------------------------------------------------
 public class GoodShopPlugin extends JavaPlugin implements Listener {
@@ -65,7 +71,9 @@ public class GoodShopPlugin extends JavaPlugin implements Listener {
 
     // is this safe to setup like this in a plugin?
 	private final String BUY_METAKEY_NAME = "BUYX";
+	private final String ACTION_METAKEY_NAME = "USEX";
 	private final MetaKeyByte BUY_METAKEY = new MetaKeyByte( BUY_METAKEY_NAME );
+	private final MetaKeyFlag ACTION_METAKEY = new MetaKeyFlag( ACTION_METAKEY_NAME );
 	
 	private Commands commands;
 	/*
@@ -140,7 +148,7 @@ public class GoodShopPlugin extends JavaPlugin implements Listener {
 	
 	//-------------------------------------------------------------------------------------------------
 	private boolean isShopTag( ItemStack item ) {
-		if( item == null || item.getType() == Material.AIR ) return false;
+		if( !itemExists(item) ) return false;
 		if( item.getType() != Material.COBBLESTONE ) return false;
 		String name = item.getItemMeta().getDisplayName();
 		if( name == null ) return false;
@@ -159,13 +167,13 @@ public class GoodShopPlugin extends JavaPlugin implements Listener {
 	}
 	
 	//-------------------------------------------------------------------------------------------------
-	private void loadShopInventory( Inventory dest, Inventory source ) {
+	private void loadShopInventory( Player forWho, Inventory dest, Inventory source ) {
 		
 		for( int i = 0; i < source.getSize()-1; i++ ) {
 			if( (i%9) == 8 ) continue; // don't allow tags to cross sections
 			
 			ItemStack item = source.getItem(i);
-			if( item == null || item.getType() == Material.AIR ) continue;
+			if( !itemExists(item) ) continue;
 			if( isShopTag( item ) ) continue;
 			 
 			ItemStack tag = source.getItem(i+1);
@@ -180,41 +188,63 @@ public class GoodShopPlugin extends JavaPlugin implements Listener {
 			
 			
 			PriceTag price = new PriceTag( item, tag );
-			if( !price.valid ) continue;
-			
-			Byte slot = LoreMeta.getData( item, new MetaKeyByte("SLOT") );
-			if( slot != null ) {
-				if( itemExists(dest.getItem( slot )) ) {
+			if( !price.valid ) continue; 
+			if( price.slot != null ) {
+				if( price.slot >= dest.getSize() || itemExists(dest.getItem( price.slot ) ) ) {
 					continue; // the desired slot is already used.
 				}
 			}
 			
-			if( price.buy != null ) {
-				lore.add( "@@[B:"+BUY_METAKEY_NAME+":" + (i-1)+"]" );
-				if( price.buy == 0.0f ) {
-					lore.add( "" + ChatColor.WHITE + ChatColor.BOLD + "Buy:" + ChatColor.GREEN + " Free" );
-				} else {
-					lore.add( String.format( "" + ChatColor.WHITE + ChatColor.BOLD + "Buy: " + ChatColor.GREEN + "%s", economy.format( price.buy ) ) );
+			if( !price.magictag ) {
+				
+				if( price.buy != null ) {
+					lore.add( "@@[B:"+BUY_METAKEY_NAME+":" + (i-1)+"]" );
+					if( price.buy == 0.0f ) {
+						lore.add( "" + ChatColor.WHITE + ChatColor.BOLD + "Buy:" + ChatColor.GREEN + " Free" );
+					} else {
+						lore.add( String.format( "" + ChatColor.WHITE + ChatColor.BOLD + "Buy: " + ChatColor.GREEN + "%s", economy.format( price.buy ) ) );
+					}
 				}
-			}
-			if( price.sell != null ) {
-				String sellText = String.format( ""+ChatColor.WHITE + ChatColor.BOLD + "Sell: "+ChatColor.YELLOW + "%s", economy.format(price.sell) );
-				if( item.getAmount() > 1 ) {
-					sellText += String.format( " (%s ea.)", economy.format(price.sellSingle) );
-					
+				if( price.sell != null ) {
+					String sellText = String.format( ""+ChatColor.WHITE + ChatColor.BOLD + "Sell: "+ChatColor.YELLOW + "%s", economy.format(price.sell) );
+					if( item.getAmount() > 1 ) {
+						sellText += String.format( " (%s ea.)", economy.format(price.sellSingle) );
+						
+					}
+					lore.add( sellText ); 
 				}
-				lore.add( sellText ); 
-			}
 
-			lore.add(" ");
-			
-			if( price.buy != null ) {
-				lore.add( ChatColor.GRAY + "Right-click to purchase." );
-			}
-			if( price.sell != null ) {
-				lore.add( ChatColor.GRAY + "Drag your items up here") ;
-				lore.add( ChatColor.GRAY + "or shift-right-click to");
-				lore.add( ChatColor.GRAY + "sell them.");
+				lore.add(" ");
+				
+				if( price.buy != null ) {
+					lore.add( ChatColor.GRAY + "Right-click to purchase." );
+				}
+				if( price.sell != null ) {
+					lore.add( ChatColor.GRAY + "Drag your items up here") ;
+					lore.add( ChatColor.GRAY + "or shift-right-click to");
+					lore.add( ChatColor.GRAY + "sell them.");
+				}
+			} else {
+				if( price.buy == null ) continue; // price needs to be set for magictag
+				
+				lore.add( "@@[B:"+BUY_METAKEY_NAME+":" + (i-1)+"]" );
+				lore.add( "@@[T:"+ACTION_METAKEY_NAME+":" + price.action + "]" );
+				
+				Object newfee = MagicItems.getAPI().fireCustomAction( price.item, forWho, "getFee", price.action );
+				if( newfee != null && newfee instanceof Float ) {
+					price.buy = (Float)newfee;
+					lore.add( String.format( "@@[T:CUSTOMFEE:%.2f]",price.buy) );
+				}
+				
+				if( price.buy == 0.0f ) {
+					//lore.add( "" + ChatColor.WHITE + ChatColor.BOLD + "Buy:" + ChatColor.GREEN + " Free" );
+				} else {
+					lore.add( String.format( "" + ChatColor.YELLOW + ChatColor.BOLD + "Fee: " + ChatColor.GREEN + "%s", economy.format( price.buy ) ) );
+				}
+				
+				lore.add(" ");
+				lore.add( ChatColor.GRAY + "Right-click to select." );
+				
 			}
 			
 			ItemStack shopItem = item.clone();
@@ -223,10 +253,10 @@ public class GoodShopPlugin extends JavaPlugin implements Listener {
 			shopItem.setItemMeta( meta );
 			LoreMeta.initialize( shopItem );
 			
-			if( slot == null ) {
+			if( price.slot == null ) {
 				dest.addItem( shopItem );
 			} else {
-				dest.setItem( slot, shopItem );
+				dest.setItem( price.slot, shopItem );
 			}
 			
 			if( dest.firstEmpty() == -1 ) break;
@@ -252,9 +282,10 @@ public class GoodShopPlugin extends JavaPlugin implements Listener {
 	//-------------------------------------------------------------------------------------------------
 	public void openShop( Player player, String name, Location location, int size ) {
 		Inventory source = getSourceInventory( location );
+		if( source == null ) return;
 		
 		Inventory inventory = getServer().createInventory( new ShopHolder( location ), size, name );
-		loadShopInventory( inventory, source );
+		loadShopInventory( player, inventory, source );
 		
 		player.openInventory( inventory ); 
 	}
@@ -314,19 +345,33 @@ public class GoodShopPlugin extends JavaPlugin implements Listener {
 			return;
 		}
 		
-		if( player.getInventory().firstEmpty() < 0 ) {
-			player.sendMessage( ChatColor.RED + "Your inventory is full." );
+		if( !priceTag.magictag ) {
+			if( player.getInventory().firstEmpty() < 0 ) {
+				player.sendMessage( ChatColor.RED + "Your inventory is full." );
+				return;
+			}
+		} else {
+			String newfee = LoreMeta.getData( item, new MetaKeyText("CUSTOMFEE") );
+			if( newfee != null ) {
+				priceTag.buy = Float.parseFloat(newfee);
+			}
+		}
+		
+		if( !economy.isEnabled() ) {
+			player.sendMessage( "An error occurred; please try again later." );
 			return;
 		}
 		 
-		
 		if( economy.getBalance( player ) < priceTag.buy ) {
 			player.sendMessage( ChatColor.RED + "You don't have enough money." );
 			return;
 		}
-		  
-		EconomyResponse response = economy.withdrawPlayer( player, priceTag.buy );
-		if( response.transactionSuccess() ) {
+		 
+			
+		if( !priceTag.magictag ) {
+			
+			economy.withdrawPlayer( player, priceTag.buy );
+			
 			player.getInventory().addItem( priceTag.item.clone() );
 			int quantity = priceTag.item.getAmount();
 			if( quantity == 1 ) {
@@ -344,10 +389,33 @@ public class GoodShopPlugin extends JavaPlugin implements Listener {
 						economy.format( priceTag.buy ) ) 
 						);
 			}
-			
 		} else {
-			player.sendMessage( "An error occurred; please try again later." );
+			
+			
+			// fire MagicItem event!
+			Object result = MagicItems.getAPI().fireCustomAction( 
+					priceTag.item, player, priceTag.action );
+			
+			if( result instanceof NotAMagicItem ) {
+				
+				player.sendMessage( "An error occurred; please try again later." );
+				return;
+			} else if( result == null ) {
+				
+				// the action returns null if he can't use the option, and a fee
+				// won't be charged.
+				return;
+			} else {
+				
+				if( priceTag.buy != 0.0f ) {
+					economy.withdrawPlayer( player, priceTag.buy );
+					player.sendMessage( 
+							String.format( ChatColor.GREEN + "You spent %s" + ChatColor.GREEN + ".",
+									economy.format( priceTag.buy ) ) );
+				}
+			}
 		}
+		
 	}
 	
 	//-------------------------------------------------------------------------------------------------

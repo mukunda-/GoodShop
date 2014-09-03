@@ -17,6 +17,8 @@ public class PricetagCommand extends CommandHandler {
 	
 	private static final String BUY_TAG = ChatColor.AQUA + "BUY: ";
 	private static final String SELL_TAG = ChatColor.YELLOW + "SELL: ";
+	private static final String SLOT_TAG = ChatColor.BLUE + "SLOT: ";
+	private static final String ACTION_TAG = ChatColor.GREEN + "ACTION: ";
 
 	//-------------------------------------------------------------------------------------------------
 	public PricetagCommand( CommandGroup parent ) {
@@ -44,14 +46,14 @@ public class PricetagCommand extends CommandHandler {
 
 	//-------------------------------------------------------------------------------------------------
 	@SuppressWarnings("deprecation")
-	public void giveStoreTag( Player player, Float buyprice, Float sellprice, Integer slot ) {
+	public static void giveStoreTag( Player player, Float buyprice, Float sellprice, Integer slot, String action ) {
 		//Inventory test = getServer().createInventory( null, 9 , "Magic Shop");
 		//player.openInventory( test );
 		ItemStack item = new ItemStack(Material.COBBLESTONE);
 		ItemMeta meta = item.getItemMeta();
 		meta.setDisplayName( ChatColor.GREEN+"#SHOPTAG" );
 		ArrayList<String> lore = new ArrayList<String>();
-		
+		lore.add("");
 		if( buyprice != null ) {
 			if( buyprice != 0.0f ) {
 				lore.add( String.format( "##" +  BUY_TAG + "%.2f", buyprice ) );
@@ -64,8 +66,13 @@ public class PricetagCommand extends CommandHandler {
 			lore.add( String.format( "##" + SELL_TAG + "%.2f", sellprice ) );
 		}
 		
+		if( action != null ) {
+			lore.add( "##"+ACTION_TAG+ action );
+		}
+		
 		if( slot != null ) {
 			lore.add( "@@[B:SLOT:" + slot + "]" );
+			lore.add( String.format( SLOT_TAG + "%d", slot ) );
 		}
 		
 		meta.setLore( lore );
@@ -87,7 +94,7 @@ public class PricetagCommand extends CommandHandler {
 		Integer slot;
 		
 		try {
-			if( args[0].equalsIgnoreCase("free") ) {
+			if( args[1].equalsIgnoreCase("free") ) {
 				buyprice = 0.0f;
 			} else {
 				buyprice = Float.parseFloat( args[1] );
@@ -98,7 +105,7 @@ public class PricetagCommand extends CommandHandler {
 				}
 			}
 			
-			if( args.length >= 2 ) {
+			if( args.length >= 3 ) {
 				sellprice = Float.parseFloat( args[2] );
 				if( sellprice < 0.0f ) {
 					throw new NumberFormatException();
@@ -109,9 +116,9 @@ public class PricetagCommand extends CommandHandler {
 				sellprice = null;
 			}
 			
-			if( args.length >= 3 ) {
+			if( args.length >= 4 ) {
 				slot = Integer.parseInt(args[3] );
-				if( slot < 0 || slot > 255 ) 
+				if( slot < 0 || slot > 127 ) 
 					throw new NumberFormatException();
 			} else {
 				slot = null;
@@ -134,7 +141,7 @@ public class PricetagCommand extends CommandHandler {
 			return;
 		}
 		
-		giveStoreTag( player, buyprice, sellprice, slot );
+		giveStoreTag( player, buyprice, sellprice, slot, null );
 	}
 
 }
