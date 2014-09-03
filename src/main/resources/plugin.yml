@@ -3,6 +3,7 @@ main: com.mukunda.goodshop.GoodShopPlugin
 version: ${version}
 depend:
  - Vault 
+ - LoreMeta
 
 
 permissions:
@@ -21,8 +22,8 @@ commands:
     description: testing command
     usage: /test2
   shoptag:
-    description: Create shop tag.
-    usage: /shoptag <buyprice> <sellprice>
+    description: Goodshop admin access
+    usage: /goodshop <command> ...
   goodshop_open:
     description: Open shop window.
     usage: /goodshop_open <name> <location> <size> [player]

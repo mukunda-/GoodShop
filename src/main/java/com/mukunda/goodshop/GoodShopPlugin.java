@@ -1,3 +1,27 @@
+/*
+ * GoodShop
+ *
+ * Copyright (c) 2014 Mukunda Johnson
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 package com.mukunda.goodshop;
 
 import java.util.ArrayList;
@@ -23,120 +47,55 @@ import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
-import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.InventoryHolder;
+import org.bukkit.inventory.Inventory; 
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
+
+import com.mukunda.cmdhandler.CommandGroup;
+import com.mukunda.goodshop.commands.PricetagCommand;
+import com.mukunda.loremeta.LoreMeta;
+import com.mukunda.loremeta.MetaKeyByte;
  
 //-------------------------------------------------------------------------------------------------
 public class GoodShopPlugin extends JavaPlugin implements Listener {
 	
     public static Economy economy = null;
+
+    // is this safe to setup like this in a plugin?
+	private final String BUY_METAKEY_NAME = "BUYX";
+	private final MetaKeyByte BUY_METAKEY = new MetaKeyByte( BUY_METAKEY_NAME );
 	
-	private static final String BUY_TAG = ChatColor.AQUA + "BUY:";
-	private static final String SELL_TAG = ChatColor.YELLOW + "SELL:";
-	
+	private Commands commands;
+	/*
 	private static final String BUY_META = ChatColor.COLOR_CHAR + "\u0117";
 	
 	private static String formatBuyMeta( int index ) {
 		if( index > 99 || index < 0 ) index = 99;
 		return BUY_META + ChatColor.COLOR_CHAR + (index / 10) + ChatColor.COLOR_CHAR + (index % 10);
-	}
+	}*/
 	
-	private Integer getBuyMeta( ItemStack item ) {
+	private Byte getBuyMeta( ItemStack item ) {
 		List<String> lore;
 		lore = item.getItemMeta().getLore();
 		if( lore == null ) return null;
+		
+		return LoreMeta.getData( item, BUY_METAKEY );
+		/*
 		for( String str: lore ) {
 			int index = str.indexOf( BUY_META );
 			if( index == -1 ) continue;
 			return Character.getNumericValue(str.charAt( index + 3 )) * 10 + Character.getNumericValue(str.charAt( index + 5 ));
 			
-		}
-		return null;
+		}*/
+		//return null;
 	}
-	
-	//-------------------------------------------------------------------------------------------------
-	private class ShopHolder implements InventoryHolder {
-		
-		public Location source;
-		
-		public ShopHolder( Location source ) {
-			this.source = source;
-		}
-
-		public Inventory getInventory() {
-			
-			return null;
-		}
-		
-	}
-	
-	public class PriceTag {
-		public ItemStack item;
-		public Float buy;
-		public Float sell;
-		public Float sellSingle = null; // filled in by user.
-		public boolean valid = false;
-		
-		public PriceTag( ItemStack item, ItemStack tag ) {
-			// read prices from tag item
-			buy = null;
-			sell = null;
-			try {
-				List<String> tagData = tag.getItemMeta().getLore();
-				for( String s: tagData ) {
-					if( s.startsWith(BUY_TAG) ) {
-						String str = s.substring( BUY_TAG.length() );
-						if( str.equals("FREE" ) ) {
-							buy = 0.0f;
-							continue;
-						}
-						
-						float cost = Float.parseFloat( str );   
-						
-						if( cost <= 0.0f ) continue;
-						buy = cost; 
-						
-					} else if( s.startsWith(SELL_TAG) ) {
-						float cost = Float.parseFloat( s.substring( SELL_TAG.length() ) );
-						if( cost <= 0.0f ) continue;
-
-						sell = cost; 
-					}
-					
-				}
-			} catch( NumberFormatException e ) {
-				buy = null;
-				sell = null;
-				valid = false;
-				return;
-			}
-			if( sell == null && buy == null ) {
-				valid = false;
-				return;
-			}
-			if( sell != null && buy != null && sell > buy ) {
-				// invalid price tag.
-				buy = null;
-				sell = null;
-				valid = false;
-				return;
-			}
-			
-			this.item = item;
-			
-			if( sell != null ) {
-				sellSingle = sell / item.getAmount();
-			}
-			valid = true;
-		}
-	}
-	
+	 
 	//-------------------------------------------------------------------------------------------------
 	private boolean setupEconomy() {
+		// link with vault
+		
         if (getServer().getPluginManager().getPlugin("Vault") == null) {
             return false;
         }
@@ -155,6 +114,8 @@ public class GoodShopPlugin extends JavaPlugin implements Listener {
 			getServer().getPluginManager().disablePlugin( this );
 			return;
 		}
+		
+		commands = new Commands();
 		getServer().getPluginManager().registerEvents( this, this );
 		
 	}
@@ -164,100 +125,17 @@ public class GoodShopPlugin extends JavaPlugin implements Listener {
 		
 	}
 	
-	//-------------------------------------------------------------------------------------------------
-	@SuppressWarnings("deprecation")
-	public void giveStoreTag( Player player, Float buyprice, Float sellprice ) {
-		//Inventory test = getServer().createInventory( null, 9 , "Magic Shop");
-		//player.openInventory( test );
-		ItemStack item = new ItemStack(Material.COBBLESTONE);
-		ItemMeta meta = item.getItemMeta();
-		meta.setDisplayName( ChatColor.GREEN+"#SHOPTAG" );
-		ArrayList<String> lore = new ArrayList<String>();
-		if( buyprice != null ) {
-			if( buyprice != 0.0f ) {
-				lore.add( String.format( BUY_TAG + "%.2f", buyprice ) );
-			} else {
-				lore.add( String.format( BUY_TAG + "FREE" ) );
-			}
-		}
-		if( sellprice != null ) {
-			lore.add( String.format( SELL_TAG + "%.2f", sellprice ) );
-		}
-		
-		meta.setLore( lore );
-		item.setItemMeta( meta );
-		player.getInventory().addItem( item );
-		player.updateInventory();
-		
-		player.sendMessage( ChatColor.GREEN + "Here you go.");
-	}
 	
 	//-------------------------------------------------------------------------------------------------
 	public boolean onCommand( CommandSender sender, Command cmd, String label, String[] args ) {
+		// TODO testing function.
 		if( cmd.getName().equalsIgnoreCase("test2") ) {
 			
 			openShop( (Player)sender, "Test Shop", new Location( Bukkit.getWorld("world"), -182, 78, 524 ), 9);
 			return true;
-		} else if( cmd.getName().equalsIgnoreCase( "shoptag" ) ) {
-			if( !(sender instanceof Player) ) { 
-				sender.sendMessage( "This is a player only command." );
-				return true;
-			}
-			Player player = (Player)sender;
-			
-			if( args.length < 1 ) {
-				sender.sendMessage( "Usage: /shoptag <buyprice> <sellprice>" );
-				sender.sendMessage( "Buy price is how much the player spends when buying the item. Put 0 to make it not buyable, and \"FREE\" to make it FREE." );
-				sender.sendMessage( "Sell price is how much money the player gets when selling the item. Put 0 to make it not sellable." );
-				return true;
-			}
-			
-			Float buyprice, sellprice;
-			
-			try {
-				if( args[0].equalsIgnoreCase("FREE") ) {
-					buyprice = 0.0f;
-				} else {
-					buyprice = Float.parseFloat( args[0] );
-					if( buyprice < 0.0f ) {
-						throw new NumberFormatException();
-					} else if( buyprice == 0.0f ) {
-						buyprice = null;
-					}
-				}
-				
-				if( args.length >= 2 ) {
-					sellprice = Float.parseFloat( args[1] );
-					if( sellprice < 0.0f ) {
-						throw new NumberFormatException();
-					} else if( sellprice == 0.0f ) {
-						sellprice = null;
-					}
-				} else {
-					sellprice = null;
-				}
-
-				// check if the tag has either buy or sell and not neither
-				// and dont let them do something stupid.
-				if( buyprice != null && sellprice != null && sellprice > buyprice ) {
-					throw new NumberFormatException();
-				}
-
-				if( ((buyprice != null && buyprice == 0.0f) && sellprice != null) ||
-					(buyprice == null && sellprice == null)	) {
-					
-					throw new NumberFormatException();
-				}
-				
-			} catch( NumberFormatException e ) {
-				sender.sendMessage( "Invalid argument(s)." );
-				return true;
-			}
-			
-			giveStoreTag( player, buyprice, sellprice );
-			return true;
 		}
-		return false;
+		
+		return commands.onCommand( sender, cmd, label, args );
 	}
 	
 	//-------------------------------------------------------------------------------------------------
@@ -270,13 +148,19 @@ public class GoodShopPlugin extends JavaPlugin implements Listener {
 		if( name.equals( ChatColor.GREEN+"#SHOPTAG" ) ) return true;
 		return false;
 	}
-	
-	
+
+	//-------------------------------------------------------------------------------------------------
+	private boolean itemExists( ItemStack item ) {
+		if( item == null ) return false;
+		if( item.getType() == Material.AIR ) {
+			return false;
+		}
+		return true;
+	}
 	
 	//-------------------------------------------------------------------------------------------------
 	private void loadShopInventory( Inventory dest, Inventory source ) {
 		
-		int setIndex = 0;
 		for( int i = 0; i < source.getSize()-1; i++ ) {
 			if( (i%9) == 8 ) continue; // don't allow tags to cross sections
 			
@@ -294,16 +178,23 @@ public class GoodShopPlugin extends JavaPlugin implements Listener {
 			if( meta.getLore() != null ) lore.addAll( meta.getLore() );
 			lore.add(" ");
 			
-			String buyMeta = formatBuyMeta( i-1 );
 			
 			PriceTag price = new PriceTag( item, tag );
 			if( !price.valid ) continue;
 			
+			Byte slot = LoreMeta.getData( item, new MetaKeyByte("SLOT") );
+			if( slot != null ) {
+				if( itemExists(dest.getItem( slot )) ) {
+					continue; // the desired slot is already used.
+				}
+			}
+			
 			if( price.buy != null ) {
+				lore.add( "@@[B:"+BUY_METAKEY_NAME+":" + (i-1)+"]" );
 				if( price.buy == 0.0f ) {
-					lore.add( buyMeta+ChatColor.WHITE + ChatColor.BOLD + "Buy:" + ChatColor.GREEN + " Free" );
+					lore.add( "" + ChatColor.WHITE + ChatColor.BOLD + "Buy:" + ChatColor.GREEN + " Free" );
 				} else {
-					lore.add( String.format( buyMeta+ChatColor.WHITE + ChatColor.BOLD + "Buy: " + ChatColor.GREEN + "%s", economy.format( price.buy ) ) );
+					lore.add( String.format( "" + ChatColor.WHITE + ChatColor.BOLD + "Buy: " + ChatColor.GREEN + "%s", economy.format( price.buy ) ) );
 				}
 			}
 			if( price.sell != null ) {
@@ -330,9 +221,15 @@ public class GoodShopPlugin extends JavaPlugin implements Listener {
 
 			meta.setLore( lore );
 			shopItem.setItemMeta( meta );
+			LoreMeta.initialize( shopItem );
 			
-			dest.setItem( setIndex++, shopItem );
-			if( setIndex == dest.getSize() ) break;
+			if( slot == null ) {
+				dest.addItem( shopItem );
+			} else {
+				dest.setItem( slot, shopItem );
+			}
+			
+			if( dest.firstEmpty() == -1 ) break;
 			
 		}
 	}
@@ -362,6 +259,7 @@ public class GoodShopPlugin extends JavaPlugin implements Listener {
 		player.openInventory( inventory ); 
 	}
 	
+	//-------------------------------------------------------------------------------------------------
 	private PriceTag getPriceTag( Inventory source, int slot ) {
 		ItemStack check = source.getItem(slot);
 		if( check == null ) return null;
@@ -372,6 +270,7 @@ public class GoodShopPlugin extends JavaPlugin implements Listener {
 		return price;
 	}
 	
+	//-------------------------------------------------------------------------------------------------
 	private PriceTag findPriceTag( Inventory source, ItemStack item, boolean mustHaveSell, Boolean mustHaveBuy ) {
 		for( int i = 0; i < source.getSize()-1; i++ ) {
 			if( (i%9) == 8 ) continue; // dont allow tags to cross sections
@@ -399,7 +298,7 @@ public class GoodShopPlugin extends JavaPlugin implements Listener {
 		ItemStack item = event.getCurrentItem();
 		if( item == null ) return;
 		
-		Integer sourceIndex = getBuyMeta( item );
+		Byte sourceIndex = getBuyMeta( item );
 		if( sourceIndex == null ) return; 
 		
 		ShopHolder holder = (ShopHolder)event.getInventory().getHolder();
